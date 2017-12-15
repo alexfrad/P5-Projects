@@ -1,6 +1,8 @@
 const frames = 60;
 const BRICK_WIDTH = 40;
 const BRICK_HEIGHT = 20;
+const CANVAS_WIDTH = 500;
+const CANVAS_HEIGHT = 300;
 const PADDLE_WIDTH = 125;
 const PADDLE_HEIGHT = 10;
 const BALL_RADIUS = 15;
@@ -12,13 +14,13 @@ let ball = null;
 
 
 function setup() {
-    createCanvas(1000, 600);
+    createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
     background(0);
     frameRate(frames);
     paddle = new Paddle();
     ball = new Ball();
-    for(let i = 0; i< canvas.height-280; i+= BRICK_HEIGHT){
-        for(let j = 0; j< canvas.width; j+= BRICK_WIDTH){
+    for(let i = 0; i< CANVAS_HEIGHT*0.3; i+= BRICK_HEIGHT){
+        for(let j = 0; j< CANVAS_WIDTH; j+= BRICK_WIDTH){
             bricks.push(new Brick(new Position(j, i)));
         }
     }
@@ -27,13 +29,14 @@ function setup() {
 function draw() {
     clear();
     background(0);
-
-    paddle.draw();
-    paddle.hitTest(ball);
-
-    bricks.forEach(brick => brick.draw());
-
+    
     ball.draw();
+    paddle.draw();
+
+    Utils.intersects(ball, paddle);
+    
+    bricks.forEach(brick => brick.draw());
+    
 }
 
 function mouseClicked() {
@@ -46,19 +49,20 @@ class Brick{
         this.pos = position;
         this.width = BRICK_WIDTH;
         this.height = BRICK_HEIGHT;
+        this.center = new Position(position.x+this.width/2, position.y+this.height/2);
     }
     draw(){
-        if(this.isAlive() && this.intersects(ball) || (mousePos && this.isHit())) {
-            this.thickness = Math.max(0, this.thickness-1);
-            mousePos = null;
-        }            
         if(this.isAlive()){
-            fill(Utils.getColor(this.thickness));
-            rect(this.pos.x, this.pos.y, this.width, this.height);
-        } else{
-            fill(Utils.getColor(this.thickness));
-            rect(this.pos.x, this.pos.y, this.width, this.height);
-        }
+            if(Utils.intersects(ball, this) || (mousePos && this.isHit())) {
+                this.thickness = Math.max(0, this.thickness-1);
+                mousePos = null;
+            }
+            if(this.isAlive()){
+                // Is still alive so draw it
+                fill(Utils.getColor(this.thickness));
+                rect(this.pos.x, this.pos.y, this.width, this.height);
+            }
+        }        
     }
     isAlive(){
         return this.thickness > 0;
@@ -71,105 +75,57 @@ class Brick{
         }
         return false;
     }
-    /*hitTest(ball){
-        const ballLeftX = ball.x - ball.radius;
-        const ballRightX = ball.x + ball.radius;
-        const ballUpY = ball.y - ball.radius;
-        const ballDownY = ball.y + ball.radius;
-
-        const brickUpY = this.y;
-        const brickDownY = this.y + this.height;
-        const brickLeftX = this.x;
-        const brickRightX = this.x+this.width;
-
-        let isInX = (ballLeftX <= brickRightX && ballRightX >= brickLeftX);
-        let isInY = (ballUpY <= brickDownY && ballDownY <= brickUpY);
-        if(isInX) console.log('X')
-        if(isInY) console.log('Y')
-
-        if(isInX && isInY){
-            // Determine which direction in came from
-            // ______
-            // |\  /|
-            // | \/ |
-            // | /\ |
-            // |/__\|
-            console.log("angle", Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI);
-        }
-    }*/
-    
-    intersects(circle)
-    {
-        if(!ball.hit){
-            const circleDistanceX = Math.abs(circle.x - (this.pos.x+this.width/2));
-            const circleDistanceY = Math.abs(circle.y - (this.pos.y+this.height/2));
-        
-            if ((circleDistanceX > (this.width/2 + circle.radius)) || (circleDistanceY > (this.height/2 + circle.radius))) { 
-                return false;
-            }
-    
-            const ratioX = circleDistanceX/this.width;
-            const ratioY = circleDistanceY/this.height;
-        
-            if (circleDistanceX <= (this.width/2) && circleDistanceY <= (this.height/2)) {
-               /*if(ratioX < ratioY){
-                    circle.reverseY();
-                } else{
-                    circle.reverseX();
-                }
-                return true;*/
-                const angle = Utils.angle360(circle.x, circle.y, this.pos.x, this.pos.y);
-                
-                return true;
-            }
-        }    
-        //const cornerDistance_sq = (circleDistanceX - this.width/2)^2 + (circleDistanceY - this.height/2)^2;
-    
-        //return (cornerDistance_sq <= (circle.r^2));
-        return false;
-    }
 }
 
 class Paddle{
     constructor(){
-        this.x = canvas.width/2 - PADDLE_WIDTH;
-        this.y = canvas.height - 25;
+        this.pos = new Position(CANVAS_WIDTH/2 - PADDLE_WIDTH/2, CANVAS_HEIGHT - 25);
         this.width = PADDLE_WIDTH;
         this.height = PADDLE_HEIGHT;
+        this.center = new Position(this.pos.x+this.width/2, this.pos.y+this.height/2);
     }
     draw(){
+        paddle.hitTest();
         fill("white");
-        this.x = mouseX;
-        rect(this.x-this.width/2, this.y, this.width, this.height);
+        this.pos.x = Math.max(0, mouseX-this.width/2);
+        this.pos.x = Math.min(this.pos.x, CANVAS_WIDTH-this.width);
+        this.center.x = this.pos.x+this.width/2;
+        rect(this.pos.x, this.pos.y, this.width, this.height);
+        // fill("red");
+        // ellipse(this.center.x, this.center.y, 5, 5);
     }
-    hitTest(ball){
+    hitTest(){
         const ballLeftX = ball.x - ball.radius;
         const ballRightX = ball.x + ball.radius;
         const ballDownY = ball.y + ball.radius;
-        const paddleY = this.y + this.height;
-        const paddleLeftX = this.x-this.width/2;
-        const paddleRightX = this.x+this.width/2;
+        const paddleY = this.pos.y + this.height;
+        const paddleLeftX = this.pos.x-this.width/2;
+        const paddleRightX = this.pos.x+this.width/2;
 
         if(ballLeftX <= paddleRightX && ballRightX >= paddleLeftX && ballDownY >= paddleY){
             ball.reverseY();
         }
     }
+    
 }
 
 class Ball{
     constructor(){
-        this.x = canvas.width/2 - PADDLE_WIDTH;
-        this.y = canvas.height - 50;
+        this.x = CANVAS_WIDTH/2;
+        this.y = CANVAS_HEIGHT - 50;
         this.radius = BALL_RADIUS;
-        this.speed = 9;
+        this.speed = 6;
         this.hit = false;
         this.generateDelta();
+        this.ceilAngle = Math.atan(BRICK_HEIGHT/BRICK_WIDTH)*(180/Math.PI);
     }
     draw(){
         this.hit = false;
-        fill("white");
         this.update();
+        fill("white");
         ellipse(this.x, this.y, this.radius, this.radius);
+        // fill("red");
+        // ellipse(this.x, this.y, 5, 5);
     }
     update(){
         this.edges();
@@ -177,12 +133,12 @@ class Ball{
         this.y += this.delta.y;
     }
     edges(){
-        if(this.x-this.radius/2 <= 0 || this.x+this.radius/2 >= canvas.width){
+        if(this.x-this.radius/2 <= 0 || this.x+this.radius/2 >= CANVAS_WIDTH){
             this.delta.x *= -1;
         }
         if(this.y-this.radius/2 <= 0){
             this.delta.y *= -1;
-        } else if(this.y+this.radius/2 >= canvas.height){
+        } else if(this.y+this.radius/2 >= CANVAS_HEIGHT){
             this.reset();
         }
     }
@@ -195,47 +151,39 @@ class Ball{
         this.hit = true;
     }
     reset(){
-        this.x = canvas.width/2;
-        this.y = canvas.height - 50;
+        this.x = CANVAS_WIDTH/2;
+        this.y = CANVAS_HEIGHT - 50;
         this.generateDelta();
     }
     generateDelta(){
         this.delta = new Position(Utils.randomFloat(-0.5,1), -1);
         this.delta.multiply(this.speed);
     }
-    collide(){
-        if(angle < 45){
-            
-        } else if(angle === 45){
-
-        } else if(angle < 90){
-            
-        } else if(angle === 90){
-
-        } else if(angle < 135){
-            
-        } else if(angle === 135){
-
-        } else if(angle < 180){
-            
-        } else if(angle === 180){
-
-        } else if(angle < 225){
-            
-        } else if(angle === 225){
-
-        } else if(angle < 270){
-            
-        } else if(angle === 270){
-
-        } else if(angle < 315){
-            
-        } else if(angle === 315){
-
-        } else if(angle < 360){
-            
-        } else if(angle === 360){
-
+    collide(angle){
+        console.log("HITTING")
+        this.hit = true;
+        if(angle < this.ceilAngle){
+            this.delta.x *= -1;
+        } else if(angle === this.ceilAngle){
+            this.delta.x *= -1;
+            this.delta.y *= -1;
+        } else if(angle < 180-this.ceilAngle){
+            this.delta.y *= -1;
+        } else if(angle === 180-this.ceilAngle){
+            this.delta.x *= -1;
+            this.delta.y *= -1;            
+        } else if(angle < 180+this.ceilAngle){
+            this.delta.x *= -1;
+        } else if(angle === 180+this.ceilAngle){
+            this.delta.x *= -1;
+            this.delta.y *= -1;
+        } else if(angle < 360-this.ceilAngle){
+            this.delta.y *= -1;
+        } else if(angle === 360-this.ceilAngle){
+            this.delta.x *= -1;
+            this.delta.y *= -1;            
+        } else if(angle <= 360){
+            this.delta.x *= -1;
         }
     }
 }
@@ -251,19 +199,86 @@ class Utils{
     }
     static getColor(thickness){
         const colors = ["black", "blue", "green", "yellow", "orange", "red"];
-        return colors[thickness];
+        return colors[thickness%colors.length];
     }
     static angle(cx, cy, ex, ey) {
-        var dy = ey - cy;
-        var dx = ex - cx;
-        var theta = Math.atan2(dy, dx); // range (-PI, PI]
-        theta *= 180 / Math.PI; // rads to degs, range (-180, 180]
-        return theta;
-      }
+        return Math.atan2(ey-cy, ex-cx); // range (-PI, PI]
+    }
     static angle360(cx, cy, ex, ey) {
-        var theta = angle(cx, cy, ex, ey); // range (-180, 180]
+        return Utils.radToDeg(Utils.angle(cx, cy, ex, ey));
+    }
+    static radToDeg(theta){
+        theta *= 180 / Math.PI; // rads to degs, range (-180, 180]
         if (theta < 0) theta = 360 + theta; // range [0, 360)
         return theta;
+    }
+    static degToRad(deg){
+        return deg * Math.PI / 180;
+    }
+    static intersects(circle, rect){
+        if(!circle.hit){
+            const rectPoint = Utils.getAngleRectPoint(rect, new Position(circle.x, circle.y));
+            const circlePoint = Utils.getAngleCirclePoint(circle, rect.center);
+
+            // fill("green");
+            // ellipse(rectPoint.x, rectPoint.y, 5, 5);
+            // ellipse(circlePoint.x, circlePoint.y, 5, 5);
+
+            const a = Math.abs(rectPoint.x - circlePoint.x);
+            const b = Math.abs(rectPoint.y - circlePoint.y);
+            const circleDistance = Math.sqrt( a*a + b*b );
+        
+            if (circleDistance < circle.speed) {
+                const angle = Utils.angle(0, 0, circle.x - rect.center.x, -(circle.y - rect.center.y));
+                circle.collide(Utils.radToDeg(angle));
+                return true;
+            }
+        }
+        return false;
+    }
+    static getAngleRectPoint(rect, pos){
+        //https://stackoverflow.com/questions/4061576/finding-points-on-a-rectangle-at-a-given-angle
+        let theta = Utils.angle(0, 0, pos.x - rect.center.x, -(pos.y - rect.center.y));
+        
+        var rectAtan = Math.atan2(rect.height, rect.width);
+        var tanTheta = Math.tan(theta);
+        var region = 4;
+
+        if ((theta > -rectAtan) && (theta <= rectAtan)) {
+            region = 1;
+        } else if ((theta > rectAtan) && (theta <= (Math.PI - rectAtan))) {
+            region = 2;
+        } else if ((theta > (Math.PI - rectAtan)) || (theta <= -(Math.PI - rectAtan))) {
+            region = 3;
+        }
+        
+        var edgePoint = {x: rect.width/2, y: rect.height/2};
+        var xFactor = 1;
+        var yFactor = 1;
+
+        switch (region) {
+            case 1: yFactor = -1; break;
+            case 2: yFactor = -1; break;
+            case 3: xFactor = -1; break;
+            case 4: xFactor = -1; break;
+        }
+        
+        if ((region === 1) || (region === 3)) {
+            edgePoint.x += xFactor * (rect.width / 2.);                 // "Z0"
+            edgePoint.y += yFactor * (rect.width / 2.) * tanTheta;
+        } else {
+            edgePoint.x += xFactor * (rect.height / (2. * tanTheta));   // "Z1"
+            edgePoint.y += yFactor * (rect.height /  2.);
+        }
+        
+        return new Position(edgePoint.x + rect.pos.x, edgePoint.y + rect.pos.y);
+    }
+    static getAngleCirclePoint(circle, pos){
+        //let theta = Utils.angle(circle.x, circle.y, pos.x, pos.y);
+        let theta = Utils.angle(0, 0, pos.x - circle.x, pos.y - circle.y);
+        const x = circle.x + circle.radius/2 * cos(theta);
+        const y = circle.y + circle.radius/2 * sin(theta);
+        return new Position(x,y);
     }
 
 }
